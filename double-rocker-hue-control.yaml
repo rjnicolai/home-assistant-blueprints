@@ -1,0 +1,151 @@
+blueprint:
+  name: Aqara H1 Double Rocker - Hue Light Control with Dimming
+  description: |
+    Control Philips Hue lights with Aqara H1 EU double rocker switch (WS-EUK04) in decoupled mode.
+    - Left single: Dim down
+    - Left double: Turn off
+    - Right single: Brighten up  
+    - Right double: Turn on
+    - Both single: Toggle
+    - Both double: Set to 100%
+  domain: automation
+  input:
+    switch_action:
+      name: Aqara H1 Action Sensor
+      description: The action sensor or event entity for your Aqara switch
+      selector:
+        entity:
+          domain:
+            - sensor
+            - event
+          multiple: false
+    target_light_left:
+      name: Left Light
+      description: Light controlled by left button
+      selector:
+        target:
+          entity:
+            - domain: light
+    target_light_right:
+      name: Right Light (Optional)
+      description: Light controlled by right button (leave empty to control same light as left)
+      default: {}
+      selector:
+        target:
+          entity:
+            - domain: light
+    dim_step:
+      name: Dimming Step
+      description: Percentage to dim/brighten per button press
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 25
+          step: 5
+          unit_of_measurement: "%"
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input switch_action
+
+variables:
+  action: >
+    {% if trigger.to_state.state is defined %}
+      {{ trigger.to_state.state }}
+    {% elif trigger.to_state.attributes.event_type is defined %}
+      {{ trigger.to_state.attributes.event_type }}
+    {% else %}
+      none
+    {% endif %}
+  left_light: !input target_light_left
+  right_light: !input target_light_right
+  use_separate_lights: "{{ right_light.entity_id is defined and right_light.entity_id | length > 0 }}"
+  dim_amount: !input dim_step
+
+action:
+  - choose:
+      # LEFT BUTTON - Single press: Dim down
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'single_left' }}"
+        sequence:
+          - service: light.turn_on
+            target: !input target_light_left
+            data:
+              brightness_step_pct: "{{ -dim_amount }}"
+
+      # LEFT BUTTON - Double press: Turn off
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'double_left' }}"
+        sequence:
+          - service: light.turn_off
+            target: !input target_light_left
+
+      # RIGHT BUTTON - Single press: Brighten up
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'single_right' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_separate_lights }}"
+                sequence:
+                  - service: light.turn_on
+                    target: !input target_light_right
+                    data:
+                      brightness_step_pct: "{{ dim_amount }}"
+            default:
+              - service: light.turn_on
+                target: !input target_light_left
+                data:
+                  brightness_step_pct: "{{ dim_amount }}"
+
+      # RIGHT BUTTON - Double press: Turn on
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'double_right' }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_separate_lights }}"
+                sequence:
+                  - service: light.turn_on
+                    target: !input target_light_right
+            default:
+              - service: light.turn_on
+                target: !input target_light_left
+
+      # BOTH BUTTONS - Single press: Toggle
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'single_both' }}"
+        sequence:
+          - service: light.toggle
+            target: !input target_light_left
+          - condition: template
+            value_template: "{{ use_separate_lights }}"
+          - service: light.toggle
+            target: !input target_light_right
+
+      # BOTH BUTTONS - Double press: Full brightness
+      - conditions:
+          - condition: template
+            value_template: "{{ action == 'double_both' }}"
+        sequence:
+          - service: light.turn_on
+            target: !input target_light_left
+            data:
+              brightness_pct: 100
+          - condition: template
+            value_template: "{{ use_separate_lights }}"
+          - service: light.turn_on
+            target: !input target_light_right
+            data:
+              brightness_pct: 100
