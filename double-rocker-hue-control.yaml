@@ -1,13 +1,9 @@
 blueprint:
-  name: Aqara H1 Double Rocker - Hue Light Control with Dimming
+  name: Aqara H1 Double Rocker - Simple Toggle and Dim
   description: |
-    Control Philips Hue lights with Aqara H1 EU double rocker switch (WS-EUK04) in decoupled mode.
-    - Left single: Dim down
-    - Left double: Turn off
-    - Right single: Brighten up  
-    - Right double: Turn on
-    - Both single: Toggle
-    - Both double: Set to 100%
+    Control Philips Hue lights with Aqara H1 EU double rocker switch (WS-EUK04).
+    - Single press: Toggle light on/off
+    - Double press: Cycle through brightness levels (25% → 50% → 75% → 100% → 25%...)
   domain: automation
   input:
     switch_action:
@@ -34,16 +30,6 @@ blueprint:
         target:
           entity:
             - domain: light
-    dim_step:
-      name: Dimming Step
-      description: Percentage to dim/brighten per button press
-      default: 10
-      selector:
-        number:
-          min: 5
-          max: 25
-          step: 5
-          unit_of_measurement: "%"
 
 mode: restart
 max_exceeded: silent
@@ -64,29 +50,45 @@ variables:
   left_light: !input target_light_left
   right_light: !input target_light_right
   use_separate_lights: "{{ right_light.entity_id is defined and right_light.entity_id | length > 0 }}"
-  dim_amount: !input dim_step
 
 action:
   - choose:
-      # LEFT BUTTON - Single press: Dim down
+      # LEFT BUTTON - Single press: Toggle
       - conditions:
           - condition: template
             value_template: "{{ action == 'single_left' }}"
         sequence:
-          - service: light.turn_on
+          - service: light.toggle
             target: !input target_light_left
-            data:
-              brightness_step_pct: "{{ -dim_amount }}"
 
-      # LEFT BUTTON - Double press: Turn off
+      # LEFT BUTTON - Double press: Cycle brightness
       - conditions:
           - condition: template
             value_template: "{{ action == 'double_left' }}"
         sequence:
-          - service: light.turn_off
+          - service: light.turn_on
             target: !input target_light_left
+            data:
+              brightness_pct: >
+                {% set lights = left_light.entity_id %}
+                {% if lights is string %}
+                  {% set lights = [lights] %}
+                {% endif %}
+                {% set current = state_attr(lights[0], 'brightness') | int(0) %}
+                {% set current_pct = (current / 255 * 100) | int %}
+                {% if current_pct < 25 %}
+                  25
+                {% elif current_pct < 50 %}
+                  50
+                {% elif current_pct < 75 %}
+                  75
+                {% elif current_pct < 100 %}
+                  100
+                {% else %}
+                  25
+                {% endif %}
 
-      # RIGHT BUTTON - Single press: Brighten up
+      # RIGHT BUTTON - Single press: Toggle
       - conditions:
           - condition: template
             value_template: "{{ action == 'single_right' }}"
@@ -96,17 +98,13 @@ action:
                   - condition: template
                     value_template: "{{ use_separate_lights }}"
                 sequence:
-                  - service: light.turn_on
+                  - service: light.toggle
                     target: !input target_light_right
-                    data:
-                      brightness_step_pct: "{{ dim_amount }}"
             default:
-              - service: light.turn_on
+              - service: light.toggle
                 target: !input target_light_left
-                data:
-                  brightness_step_pct: "{{ dim_amount }}"
 
-      # RIGHT BUTTON - Double press: Turn on
+      # RIGHT BUTTON - Double press: Cycle brightness
       - conditions:
           - condition: template
             value_template: "{{ action == 'double_right' }}"
@@ -118,11 +116,49 @@ action:
                 sequence:
                   - service: light.turn_on
                     target: !input target_light_right
+                    data:
+                      brightness_pct: >
+                        {% set lights = right_light.entity_id %}
+                        {% if lights is string %}
+                          {% set lights = [lights] %}
+                        {% endif %}
+                        {% set current = state_attr(lights[0], 'brightness') | int(0) %}
+                        {% set current_pct = (current / 255 * 100) | int %}
+                        {% if current_pct < 25 %}
+                          25
+                        {% elif current_pct < 50 %}
+                          50
+                        {% elif current_pct < 75 %}
+                          75
+                        {% elif current_pct < 100 %}
+                          100
+                        {% else %}
+                          25
+                        {% endif %}
             default:
               - service: light.turn_on
                 target: !input target_light_left
+                data:
+                  brightness_pct: >
+                    {% set lights = left_light.entity_id %}
+                    {% if lights is string %}
+                      {% set lights = [lights] %}
+                    {% endif %}
+                    {% set current = state_attr(lights[0], 'brightness') | int(0) %}
+                    {% set current_pct = (current / 255 * 100) | int %}
+                    {% if current_pct < 25 %}
+                      25
+                    {% elif current_pct < 50 %}
+                      50
+                    {% elif current_pct < 75 %}
+                      75
+                    {% elif current_pct < 100 %}
+                      100
+                    {% else %}
+                      25
+                    {% endif %}
 
-      # BOTH BUTTONS - Single press: Toggle
+      # BOTH BUTTONS - Single press: Toggle all
       - conditions:
           - condition: template
             value_template: "{{ action == 'single_both' }}"
@@ -134,7 +170,7 @@ action:
           - service: light.toggle
             target: !input target_light_right
 
-      # BOTH BUTTONS - Double press: Full brightness
+      # BOTH BUTTONS - Double press: Set all to 100%
       - conditions:
           - condition: template
             value_template: "{{ action == 'double_both' }}"
