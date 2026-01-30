@@ -1,0 +1,30 @@
+blueprint:
+  name: ZBMINI Switch Controls Smart Bulb
+  description: Use a ZBMINI relay as a switch sensor to control a smart bulb (Hue, IKEA, etc.)
+  domain: automation
+  input:
+    zbmini_switch:
+      name: ZBMINI Switch Entity
+      description: The ZBMINI switch entity that detects physical switch presses
+      selector:
+        entity:
+          domain: switch
+    target_light:
+      name: Smart Bulb
+      description: The smart bulb (Hue, IKEA, etc.) to control
+      selector:
+        entity:
+          domain: light
+
+trigger:
+  - platform: state
+    entity_id: !input zbmini_switch
+
+condition: []
+
+action:
+  - service: light.toggle
+    target:
+      entity_id: !input target_light
+
+mode: single
