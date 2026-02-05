@@ -1,6 +1,6 @@
 blueprint:
-  name: ZBMINI Switch Controls Smart Bulb (States Synced)
-  description: ZBMINI relay state matches smart bulb state
+  name: ZBMINI Switch Controls Smart Bulb (Toggle)
+  description: ZBMINI switch toggles smart bulb state
   domain: automation
   input:
     zbmini_switch:
@@ -13,28 +13,25 @@ blueprint:
       selector:
         entity:
           domain: light
-
 trigger:
   - platform: state
     entity_id: !input zbmini_switch
-
 action:
   - choose:
       - conditions:
           - condition: state
-            entity_id: !input zbmini_switch
+            entity_id: !input target_light
             state: "on"
-        sequence:
-          - service: light.turn_on
-            target:
-              entity_id: !input target_light
-      - conditions:
-          - condition: state
-            entity_id: !input zbmini_switch
-            state: "off"
         sequence:
           - service: light.turn_off
             target:
               entity_id: !input target_light
-
+      - conditions:
+          - condition: state
+            entity_id: !input target_light
+            state: "off"
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: !input target_light
 mode: single
