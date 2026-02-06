@@ -1,0 +1,240 @@
+blueprint:
+  name: Aqara H1 Double Rocker - Hue Light Control
+  description: Control Philips Hue lights with Aqara Wireless H1 Double Rocker switch
+  domain: automation
+  input:
+    switch_device:
+      name: Aqara H1 Double Rocker
+      description: Select your Aqara H1 switch
+      selector:
+        device:
+          integration: mqtt
+          manufacturer: Aqara    
+    left_light:
+      name: Left Button Light/Group
+      description: Light or group to control with left button
+      selector:
+        entity:
+          domain: light
+    
+    right_light:
+      name: Right Button Light/Group
+      description: Light or group to control with right button
+      selector:
+        entity:
+          domain: light
+    
+    left_brightness_step:
+      name: Left Button Brightness Step
+      description: Brightness change percentage for left button hold (1-100)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    
+    right_brightness_step:
+      name: Right Button Brightness Step
+      description: Brightness change percentage for right button hold (1-100)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    
+    both_buttons_action:
+      name: Both Buttons Action (Optional)
+      description: What to do when both buttons are pressed together
+      default: all_off
+      selector:
+        select:
+          options:
+            - label: Turn off both lights
+              value: all_off
+            - label: Turn on both lights
+              value: all_on
+            - label: Do nothing
+              value: none
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: single_left
+    id: left_single
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: single_right
+    id: right_single
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: double_left
+    id: left_double
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: double_right
+    id: right_double
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: hold_left
+    id: left_hold
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: hold_right
+    id: right_hold
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: single_both
+    id: both_single
+
+action:
+  - choose:
+      # Left button single press - toggle
+      - conditions:
+          - condition: trigger
+            id: left_single
+        sequence:
+          - service: light.toggle
+            target:
+              entity_id: !input left_light
+      
+      # Right button single press - toggle
+      - conditions:
+          - condition: trigger
+            id: right_single
+        sequence:
+          - service: light.toggle
+            target:
+              entity_id: !input right_light
+      
+      # Left button double press - turn on at 100% brightness
+      - conditions:
+          - condition: trigger
+            id: left_double
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: !input left_light
+            data:
+              brightness_pct: 100
+      
+      # Right button double press - turn on at 100% brightness
+      - conditions:
+          - condition: trigger
+            id: right_double
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: !input right_light
+            data:
+              brightness_pct: 100
+      
+      # Left button hold - increase/decrease brightness intelligently
+      - conditions:
+          - condition: trigger
+            id: left_hold
+        sequence:
+          - choose:
+              # If light is off or below 90%, increase brightness
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {% set light = states[left_light] %}
+                      {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input left_light
+                    data:
+                      brightness_step_pct: !input left_brightness_step
+            # If brightness is 90% or higher, decrease brightness
+            default:
+              - service: light.turn_on
+                target:
+                  entity_id: !input left_light
+                data:
+                  brightness_step_pct: "{{ -1 * left_brightness_step }}"
+      
+      # Right button hold - increase/decrease brightness intelligently
+      - conditions:
+          - condition: trigger
+            id: right_hold
+        sequence:
+          - choose:
+              # If light is off or below 90%, increase brightness
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {% set light = states[right_light] %}
+                      {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input right_light
+                    data:
+                      brightness_step_pct: !input right_brightness_step
+            # If brightness is 90% or higher, decrease brightness
+            default:
+              - service: light.turn_on
+                target:
+                  entity_id: !input right_light
+                data:
+                  brightness_step_pct: "{{ -1 * right_brightness_step }}"
+      
+      # Both buttons pressed
+      - conditions:
+          - condition: trigger
+            id: both_single
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ both_buttons_action == 'all_off' }}"
+                sequence:
+                  - service: light.turn_off
+                    target:
+                      entity_id:
+                        - !input left_light
+                        - !input right_light
+              
+              - conditions:
+                  - condition: template
+                    value_template: "{{ both_buttons_action == 'all_on' }}"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id:
+                        - !input left_light
+                        - !input right_light
+            default: []
+
+variables:
+  both_buttons_action: !input both_buttons_action
+  left_light: !input left_light
+  right_light: !input right_light
+  left_brightness_step: !input left_brightness_step
+  right_brightness_step: !input right_brightness_step
