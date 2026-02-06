@@ -13,9 +13,7 @@ blueprint:
       selector:
         device:
           integration: mqtt
-          manufacturer: Aqara
-          model: Wireless Remote Switch H1 Double Rocker (WRS-R02)
-    
+          manufacturer: Aqara    
     left_light:
       name: Left Button Light/Group
       description: Light or group to control with left button
