@@ -10,7 +10,7 @@ blueprint:
         entity:
           filter:
             - domain: binary_sensor
-              device_class: motion
+              device_class: occupancy
     door_sensor:
       name: Door Sensor
       description: The door/window sensor that detects entry
