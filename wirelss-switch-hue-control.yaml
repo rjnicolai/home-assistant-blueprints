@@ -190,24 +190,22 @@ action:
             id: left_hold
         sequence:
           - repeat:
-              while:
-                - condition: template
-                  value_template: "true"
+              count: 100
               sequence:
                 - choose:
-                    # If light is off or below 100%, increase brightness
+                    # If light is off or below 90%, increase brightness
                     - conditions:
                         - condition: template
                           value_template: >
                             {% set light = states[left_light] %}
-                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 255 }}
+                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
                       sequence:
                         - service: light.turn_on
                           target:
                             entity_id: !input left_light
                           data:
                             brightness_step_pct: !input left_brightness_step
-                  # If brightness is at 100%, decrease brightness
+                  # If brightness is 90% or higher, decrease brightness
                   default:
                     - service: light.turn_on
                       target:
@@ -223,24 +221,22 @@ action:
             id: right_hold
         sequence:
           - repeat:
-              while:
-                - condition: template
-                  value_template: "true"
+              count: 100
               sequence:
                 - choose:
-                    # If light is off or below 100%, increase brightness
+                    # If light is off or below 90%, increase brightness
                     - conditions:
                         - condition: template
                           value_template: >
                             {% set light = states[right_light] %}
-                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 255 }}
+                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
                       sequence:
                         - service: light.turn_on
                           target:
                             entity_id: !input right_light
                           data:
                             brightness_step_pct: !input right_brightness_step
-                  # If brightness is at 100%, decrease brightness
+                  # If brightness is 90% or higher, decrease brightness
                   default:
                     - service: light.turn_on
                       target:
