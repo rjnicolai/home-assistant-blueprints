@@ -1,0 +1,78 @@
+blueprint:
+  name: Door Entry Light with Motion
+  description: Turn on light when door closes after being opened and motion is detected. Turn off after no motion for a specified time.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      description: The motion sensor that detects presence
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+              device_class: motion
+    door_sensor:
+      name: Door Sensor
+      description: The door/window sensor that detects entry
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+              device_class: 
+                - door
+                - opening
+    light_target:
+      name: Light
+      description: The light to control
+      selector:
+        target:
+          entity:
+            - domain: light
+    door_timeout:
+      name: Door Timeout
+      description: How long after door opens to still trigger the light (seconds)
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: seconds
+    motion_timeout:
+      name: Motion Timeout
+      description: How long to wait after motion stops before turning off light
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: minutes
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+    id: motion_detected
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for:
+      minutes: !input motion_timeout
+    id: motion_cleared
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: motion_detected
+          - condition: state
+            entity_id: !input door_sensor
+            state: "off"
+          - condition: template
+            value_template: >
+              {{ (now() - states[trigger.entity_id.split('.')[0] + '.' + 
+              (door_sensor.split('.')[1] if '.' in door_sensor else door_sensor)].last_changed).total_seconds() 
+              < door_timeout }}
+        sequence:
+          - service: light.turn
