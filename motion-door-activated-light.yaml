@@ -1,6 +1,6 @@
 blueprint:
   name: Door Entry Light with Motion
-  description: Turn on light when door closes after being opened and motion is detected. Turn off after no motion for a specified time.
+  description: Turn on light when door closes after being opened and motion is detected. Turn off only when door opens again and motion clears.
   domain: automation
   input:
     motion_sensor:
@@ -27,9 +27,18 @@ blueprint:
         target:
           entity:
             - domain: light
-    door_timeout:
-      name: Door Timeout
-      description: How long after door opens to still trigger the light (seconds)
+    door_timeout_on:
+      name: Door Entry Timeout
+      description: How long after door closes to still trigger the light on motion (seconds)
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: seconds
+    door_timeout_off:
+      name: Door Exit Timeout
+      description: How long after door opens to allow light to turn off (seconds)
       default: 30
       selector:
         number:
@@ -70,8 +79,26 @@ action:
             state: "off"
           - condition: template
             value_template: >
-              {{ (now() - states[trigger.entity_id.split('.')[0] + '.' + 
-              (door_sensor.split('.')[1] if '.' in door_sensor else door_sensor)].last_changed).total_seconds() 
-              < door_timeout }}
+              {{ (now() - states[door_sensor].last_changed).total_seconds() < door_timeout_on }}
         sequence:
-          - service: light.turn
+          - service: light.turn_on
+            target: !input light_target
+      - conditions:
+          - condition: trigger
+            id: motion_cleared
+          - condition: state
+            entity_id: !input door_sensor
+            state: "off"
+          - condition: template
+            value_template: >
+              {{ (now() - states[door_sensor].last_changed).total_seconds() < door_timeout_off }}
+        sequence:
+          - service: light.turn_off
+            target: !input light_target
+
+variables:
+  door_sensor: !input door_sensor
+  door_timeout_on: !input door_timeout_on
+  door_timeout_off: !input door_timeout_off
+
+mode: restart
