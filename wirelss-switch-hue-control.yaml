@@ -1,6 +1,10 @@
 blueprint:
   name: Aqara H1 Double Rocker - Hue Light Control
-  description: Control Philips Hue lights with Aqara Wireless H1 Double Rocker switch
+  description: |
+    Control Philips Hue lights with Aqara Wireless H1 Double Rocker switch.
+    - Single press: Toggle respective light on/off
+    - Double press: Turn respective light on at 100% brightness
+    - Hold button: Continuously adjust respective light brightness (increases until 100%, then decreases)
   domain: automation
   input:
     switch_device:
@@ -9,7 +13,9 @@ blueprint:
       selector:
         device:
           integration: mqtt
-          manufacturer: Aqara    
+          manufacturer: Aqara
+          model: Wireless Remote Switch H1 Double Rocker (WRS-R02)
+    
     left_light:
       name: Left Button Light/Group
       description: Light or group to control with left button
@@ -43,6 +49,17 @@ blueprint:
           min: 1
           max: 100
           unit_of_measurement: "%"
+    
+    hold_delay:
+      name: Hold Button Delay
+      description: Delay between brightness changes when holding (in milliseconds)
+      default: 500
+      selector:
+        number:
+          min: 100
+          max: 2000
+          step: 50
+          unit_of_measurement: "ms"
     
     both_buttons_action:
       name: Both Buttons Action (Optional)
@@ -108,6 +125,20 @@ trigger:
     device_id: !input switch_device
     domain: mqtt
     type: action
+    subtype: release_left
+    id: left_release
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
+    subtype: release_right
+    id: right_release
+  
+  - platform: device
+    device_id: !input switch_device
+    domain: mqtt
+    type: action
     subtype: single_both
     id: both_single
 
@@ -153,57 +184,83 @@ action:
             data:
               brightness_pct: 100
       
-      # Left button hold - increase/decrease brightness intelligently
+      # Left button hold - increase/decrease brightness continuously
       - conditions:
           - condition: trigger
             id: left_hold
         sequence:
-          - choose:
-              # If light is off or below 90%, increase brightness
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {% set light = states[left_light] %}
-                      {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
-                sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: !input left_light
-                    data:
-                      brightness_step_pct: !input left_brightness_step
-            # If brightness is 90% or higher, decrease brightness
-            default:
-              - service: light.turn_on
-                target:
-                  entity_id: !input left_light
-                data:
-                  brightness_step_pct: "{{ -1 * left_brightness_step }}"
+          - repeat:
+              while:
+                - condition: template
+                  value_template: "true"
+              sequence:
+                - choose:
+                    # If light is off or below 100%, increase brightness
+                    - conditions:
+                        - condition: template
+                          value_template: >
+                            {% set light = states[left_light] %}
+                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 255 }}
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: !input left_light
+                          data:
+                            brightness_step_pct: !input left_brightness_step
+                  # If brightness is at 100%, decrease brightness
+                  default:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input left_light
+                      data:
+                        brightness_step_pct: "{{ -1 * left_brightness_step }}"
+                - delay:
+                    milliseconds: "{{ hold_delay }}"
       
-      # Right button hold - increase/decrease brightness intelligently
+      # Right button hold - increase/decrease brightness continuously
       - conditions:
           - condition: trigger
             id: right_hold
         sequence:
-          - choose:
-              # If light is off or below 90%, increase brightness
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {% set light = states[right_light] %}
-                      {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 230 }}
-                sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: !input right_light
-                    data:
-                      brightness_step_pct: !input right_brightness_step
-            # If brightness is 90% or higher, decrease brightness
-            default:
-              - service: light.turn_on
-                target:
-                  entity_id: !input right_light
-                data:
-                  brightness_step_pct: "{{ -1 * right_brightness_step }}"
+          - repeat:
+              while:
+                - condition: template
+                  value_template: "true"
+              sequence:
+                - choose:
+                    # If light is off or below 100%, increase brightness
+                    - conditions:
+                        - condition: template
+                          value_template: >
+                            {% set light = states[right_light] %}
+                            {{ light.state == 'off' or (light.attributes.brightness | default(0)) < 255 }}
+                      sequence:
+                        - service: light.turn_on
+                          target:
+                            entity_id: !input right_light
+                          data:
+                            brightness_step_pct: !input right_brightness_step
+                  # If brightness is at 100%, decrease brightness
+                  default:
+                    - service: light.turn_on
+                      target:
+                        entity_id: !input right_light
+                      data:
+                        brightness_step_pct: "{{ -1 * right_brightness_step }}"
+                - delay:
+                    milliseconds: "{{ hold_delay }}"
+      
+      # Left button release - stop the hold loop
+      - conditions:
+          - condition: trigger
+            id: left_release
+        sequence: []
+      
+      # Right button release - stop the hold loop
+      - conditions:
+          - condition: trigger
+            id: right_release
+        sequence: []
       
       # Both buttons pressed
       - conditions:
@@ -238,3 +295,4 @@ variables:
   right_light: !input right_light
   left_brightness_step: !input left_brightness_step
   right_brightness_step: !input right_brightness_step
+  hold_delay: !input hold_delay
