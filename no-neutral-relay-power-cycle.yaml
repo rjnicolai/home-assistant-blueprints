@@ -1,0 +1,73 @@
+blueprint:
+  name: Keep Multiple No-Neutral Relays Online
+  description: >
+    Monitors multiple no-neutral relays (like Sonoff ZBMINI-L2) and power cycles 
+    their corresponding lights when they go offline. Handles multiple relay-light 
+    pairs in a single automation.
+  domain: automation
+  input:
+    relay_light_pairs:
+      name: Relay-Light Pairs
+      description: >
+        List of relay and light pairs. Each pair should have:
+        - relay: the relay entity
+        - light: the corresponding light entity
+        - id: unique identifier for this pair
+      selector:
+        object:
+    unavailable_delay:
+      name: Unavailable Delay
+      description: How long the relay must be unavailable before triggering
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 60
+          unit_of_measurement: seconds
+          mode: slider
+    power_cycle_duration:
+      name: Power Cycle Duration
+      description: How long to turn the light on (in seconds)
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          unit_of_measurement: seconds
+          mode: slider
+
+variables:
+  pairs: !input relay_light_pairs
+  cycle_duration: !input power_cycle_duration
+
+trigger:
+  - platform: state
+    entity_id: "{{ pairs | map(attribute='relay') | list }}"
+    to: "unavailable"
+    for:
+      seconds: !input unavailable_delay
+
+condition: []
+
+action:
+  - variables:
+      triggered_relay: "{{ trigger.entity_id }}"
+      matching_light: >
+        {% set ns = namespace(light='') %}
+        {% for pair in pairs %}
+          {% if pair.relay == triggered_relay %}
+            {% set ns.light = pair.light %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.light }}
+  - service: light.turn_on
+    target:
+      entity_id: "{{ matching_light }}"
+  - delay:
+      seconds: "{{ cycle_duration }}"
+  - service: light.turn_off
+    target:
+      entity_id: "{{ matching_light }}"
+
+mode: queued
+max: 10
