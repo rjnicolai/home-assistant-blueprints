@@ -1,23 +1,29 @@
 blueprint:
-  name: Keep Multiple No-Neutral Relays Online
+  name: Keep No-Neutral Relay Online with Power Cycle
   description: >
-    Monitors multiple no-neutral relays (like Sonoff ZBMINI-L2) and power cycles 
-    their corresponding lights when they go offline. Handles multiple relay-light 
-    pairs in a single automation.
+    Automatically power cycles a light when a no-neutral relay (like Sonoff ZBMINI-L2) 
+    goes offline. This provides enough current to restore the relay's power.
+    
+    Perfect for use with Philips Hue or other smart bulbs that enter deep sleep mode.
+    
+    Create one automation per relay-light pair.
   domain: automation
   input:
-    relay_light_pairs:
-      name: Relay-Light Pairs
-      description: >
-        List of relay and light pairs. Each pair should have:
-        - relay: the relay entity
-        - light: the corresponding light entity
-        - id: unique identifier for this pair
+    relay_entity:
+      name: Relay/Switch
+      description: The relay that may go offline (e.g., Sonoff ZBMINI-L2)
       selector:
-        object:
+        entity:
+          domain: switch
+    light_entity:
+      name: Light
+      description: The light to briefly turn on to restore relay power
+      selector:
+        entity:
+          domain: light
     unavailable_delay:
       name: Unavailable Delay
-      description: How long the relay must be unavailable before triggering
+      description: How long the relay must be unavailable before triggering (prevents false alarms)
       default: 10
       selector:
         number:
@@ -36,13 +42,9 @@ blueprint:
           unit_of_measurement: seconds
           mode: slider
 
-variables:
-  pairs: !input relay_light_pairs
-  cycle_duration: !input power_cycle_duration
-
 trigger:
   - platform: state
-    entity_id: "{{ pairs | map(attribute='relay') | list }}"
+    entity_id: !input relay_entity
     to: "unavailable"
     for:
       seconds: !input unavailable_delay
@@ -50,24 +52,14 @@ trigger:
 condition: []
 
 action:
-  - variables:
-      triggered_relay: "{{ trigger.entity_id }}"
-      matching_light: >
-        {% set ns = namespace(light='') %}
-        {% for pair in pairs %}
-          {% if pair.relay == triggered_relay %}
-            {% set ns.light = pair.light %}
-          {% endif %}
-        {% endfor %}
-        {{ ns.light }}
   - service: light.turn_on
     target:
-      entity_id: "{{ matching_light }}"
+      entity_id: !input light_entity
   - delay:
-      seconds: "{{ cycle_duration }}"
+      seconds: !input power_cycle_duration
   - service: light.turn_off
     target:
-      entity_id: "{{ matching_light }}"
+      entity_id: !input light_entity
 
 mode: queued
 max: 10
