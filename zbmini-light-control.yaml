@@ -17,21 +17,7 @@ trigger:
   - platform: state
     entity_id: !input zbmini_switch
 action:
-  - choose:
-      - conditions:
-          - condition: state
-            entity_id: !input target_light
-            state: "on"
-        sequence:
-          - service: light.turn_off
-            target:
-              entity_id: !input target_light
-      - conditions:
-          - condition: state
-            entity_id: !input target_light
-            state: "off"
-        sequence:
-          - service: light.turn_on
-            target:
-              entity_id: !input target_light
+  - service: light.toggle
+    target:
+      entity_id: !input target_light
 mode: single
